@@ -1,0 +1,40 @@
+{
+  "name": "textfx-backend",
+  "version": "5.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "pkg": "pkg dist/index.js --targets node18-win-x64 --output ../release/backend/fx-server.exe --config pkg.config.json"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "keytar": "^7.9.0",
+    "node-fetch": "^2.7.0",
+    "@google-cloud/vertexai": "^1.10.0",
+    "openai": "^4.47.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^18.19.0",
+    "@types/node-fetch": "^2.6.11",
+    "@vercel/ncc": "^0.38.1",
+    "pkg": "^5.8.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "pkg": {
+    "assets": [
+      "node_modules/keytar/build/Release/*.node"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ]
+  }
+}

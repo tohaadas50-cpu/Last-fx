@@ -1,0 +1,10 @@
+{
+  "name": "textfx-electron-src",
+  "version": "5.0.0",
+  "private": true,
+  "devDependencies": {
+    "@types/node":    "^18.19.0",
+    "electron":       "^32.3.3",
+    "typescript":     "^5.4.5"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "textfx-app",
+  "version": "0.2.0",
+  "private": true,
+  "engines": { "node": ">=18", "npm": ">=9" },
+  "scripts": {
+    "dev":           "vite",
+    "build":         "vite build",
+    "preview":       "vite preview",
+    "typecheck":     "tsc --noEmit",
+    "cap:add-android": "npx cap add android",
+    "cap:sync":      "npx cap sync android",
+    "cap:open":      "npx cap open android",
+    "mobile":        "npm run build && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core":    "^6.0.0",
+    "jspdf":              "^3.0.4",
+    "react":              "^18.3.1",
+    "react-dom":          "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli":       "^6.0.0",
+    "@types/react":         "^18.3.3",
+    "@types/react-dom":     "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript":           "^5.4.5",
+    "vite":                 "^5.3.1"
+  }
+}

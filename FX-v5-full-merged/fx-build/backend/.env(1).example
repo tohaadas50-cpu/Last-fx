@@ -1,0 +1,27 @@
+# ── TextFX Backend — Environment Variables ────────────────────────────────────
+# Copy to .env and fill secrets locally. Do NOT commit .env.
+
+# ── Server ────────────────────────────────────────────────────────────────────
+PORT=4002
+NODE_ENV=development
+
+# ── CORS: comma-separated list of allowed origins (required in production) ────
+# Example: https://textfx.yourdomain.com,https://app.textfx.com
+# Leave empty in development to allow all origins.
+ALLOWED_ORIGINS=
+
+# ── AI Provider — pick one ────────────────────────────────────────────────────
+OPENAI_API_KEY=REPLACE_ME_OPENAI_API_KEY
+OPENAI_MODEL=gpt-4o
+
+# OR Google Vertex AI
+# GOOGLE_CLOUD_PROJECT=REPLACE_ME_GCP_PROJECT_ID
+# VERTEX_MODEL=gemini-1.5-pro
+
+# ── Live Trends (optional) ────────────────────────────────────────────────────
+# SERPAPI_KEY=REPLACE_ME_SERPAPI_KEY
+# TRENDS_REGION=EG
+
+# ── Governance Loop ───────────────────────────────────────────────────────────
+# AUDIT_THRESHOLD=0.7
+# MAX_RETRIES=2

@@ -1,0 +1,8 @@
+{
+  "assets": [
+    "node_modules/keytar/build/Release/keytar.node"
+  ],
+  "scripts": [
+    "dist/**/*.js"
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "name": "textfx",
+  "version": "5.0.0",
+  "private": true,
+  "description": "TextFX v5 \u2014 AI Creative Director (Windows Installer)",
+  "main": "electron/main.js",
+  "scripts": {
+    "bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"npm install; Push-Location backend; npm install; Pop-Location; Push-Location app; npm install; Pop-Location; Push-Location electron-src; npm install; Pop-Location\"",
+    "build:backend": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Push-Location backend; npx tsc -p tsconfig.json; npx pkg dist/index.js --targets node18-win-x64 --output ../release/backend/fx-server.exe --config pkg.config.json; Pop-Location\"",
+    "build:app": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Push-Location app; npm run build; Pop-Location\"",
+    "build:electron": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Push-Location electron-src; npx tsc -p tsconfig-electron.json; Pop-Location\"",
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"npm run build:backend; npm run build:app; npm run build:electron; npx electron-builder --win --x64\"",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+    "start": "npm --workspace backend start"
+  },
+  "workspaces": [
+    "app",
+    "backend",
+    "electron-src"
+  ],
+  "build": {
+    "appId": "com.textfx.v5",
+    "productName": "TextFX",
+    "copyright": "Copyright \u00a9 2025 TextFX",
+    "extends": null,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release/installer"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TextFX",
+      "include": "build/installer.nsh"
+    },
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "extraResources": [
+      {
+        "from": "release/backend/fx-server.exe",
+        "to": "backend/fx-server.exe"
+      }
+    ],
+    "files": [
+      "electron/**/*",
+      "app/dist/**/*",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "@types/electron": "^1.6.10",
+    "@types/node": "^18.19.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.8",
+    "tree-kill": "^1.2.2",
+    "typescript": "^5.4.5",
+    "wait-on": "^9.0.3"
+  },
+  "dependencies": {
+    "tree-kill": "^1.2.2"
+  }
+}
