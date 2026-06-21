@@ -214,6 +214,9 @@ function buildCtx(extra: Record<string, unknown> = {}) {
   const hasOAI = !!process.env.OPENAI_API_KEY
   const hasVtx = !!process.env.GOOGLE_CLOUD_PROJECT
   return {
+    domain:         'general',
+    problem:        'creative challenge',
+    target:         'audience',
     useRealAI:      hasOAI || hasVtx,
     provider:       hasOAI ? openaiProvider : hasVtx ? vertexProvider : null,
     providerConfig: hasOAI ? openaiProvider.initializeOpenAI() : hasVtx ? vertexProvider.initializeVertexAI() : null,

@@ -2,14 +2,28 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  // CRITICAL: relative asset paths for Capacitor WebView
   base: './',
 
   plugins: [react()],
 
   server: {
-    port: 5173,
-    host: '0.0.0.0', // allow LAN access for device testing
+    port: 5000,
+    host: '0.0.0.0',
+    allowedHosts: 'all',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4002',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:4002',
+        changeOrigin: true,
+      },
+      '/healthz': {
+        target: 'http://localhost:4002',
+        changeOrigin: true,
+      },
+    },
   },
 
   build: {

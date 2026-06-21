@@ -108,7 +108,7 @@ async function fetchLiveNews(
       return null
     }
 
-    const data = await response.json()
+    const data = await response.json() as any
     const results = data?.news_results || []
 
     if (!results.length) return null
@@ -201,7 +201,7 @@ async function fetchRealTrends(
 
     if (!response.ok) return null
 
-    const data = await response.json()
+    const data = await response.json() as any
     const rising = data?.related_queries?.rising || []
     if (!rising.length) return null
 
