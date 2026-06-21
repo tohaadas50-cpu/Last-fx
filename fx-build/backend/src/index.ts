@@ -4,6 +4,16 @@
  * CLI:  node dist/index.js --port=<n> --cert=<cert.pem> --key=<key.pem>
  * Binds ONLY to 127.0.0.1.  No OpenAI keys in repo — reads via keytar.
  * Packaged by pkg  →  release/backend/fx-server.exe
+ *
+ * Phase 3 hardening applied:
+ *  - CORS origin configurable via CORS_ORIGIN env (default: localhost:5000)
+ *  - Security headers on every response (CSP, X-Frame-Options, etc.)
+ *  - General rate limiter (120 req/min) + strict LLM limiter (60 req/min)
+ *  - X-Request-ID on every response; correlated in access log
+ *  - Input sanitization + policy check on all 4 pipeline routes
+ *  - 30 s timeout wrapper on every async AI call
+ *  - GET /api/metrics — real-time latency / error-rate / provider telemetry
+ *  - Startup environment validation log
  */
 
 import https  from 'https'
@@ -24,6 +34,7 @@ import * as vertexProvider  from './providers/googleVertexProvider'
 import * as openaiProvider  from './providers/openaiProvider'
 import agentRoutes from './agent/agent-route'
 import saasRoutes  from './saas/saas-route'
+import { recordRequest, getMetrics } from './utils/metrics'
 
 // ─── keytar (native — included as pkg asset) ──────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +52,7 @@ function getArg(name: string, fallback?: string): string | undefined {
   const match  = process.argv.find(a => a.startsWith(prefix))
   return match ? match.slice(prefix.length) : fallback
 }
-const PORT      = parseInt(getArg('port', '4002')!, 10)
+const PORT      = parseInt(getArg('port', '3001')!, 10)
 const CERT_PATH = getArg('cert')
 const KEY_PATH  = getArg('key')
 
@@ -123,11 +134,47 @@ function policyCheck(s: string): { allowed: boolean; reason?: string } {
   return { allowed: true }
 }
 
+// ─── Timeout wrapper ──────────────────────────────────────────────────────────
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ])
+}
+
 // ─── Express app ──────────────────────────────────────────────────────────────
 const app = express()
-app.use(cors({ origin: false }))   // no cross-origin; Electron uses IPC bridge
+
+// CORS — allow configured origin (Vite proxy dev) or custom prod origin
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5000'
+app.use(cors({ origin: CORS_ORIGIN }))
+
+// Security headers (no external package required)
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('X-XSS-Protection', '0')                          // modern: rely on CSP
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Content-Security-Policy', "default-src 'none'")
+  next()
+})
+
 app.use(express.json({ limit: '512kb' }))
 
+// General rate limiter — all routes except health probes
+const generalLimiter = rateLimit({
+  windowMs:        60_000,
+  max:             120,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  skip:            (req) => req.path === '/health' || req.path === '/healthz',
+  message:         { error: 'rate limit exceeded — max 120 req/min' },
+})
+app.use(generalLimiter)
+
+// Stricter limiter for raw LLM endpoint
 const llmLimiter = rateLimit({
   windowMs:        60_000,
   max:             60,
@@ -136,11 +183,17 @@ const llmLimiter = rateLimit({
   message:         { error: 'rate limit exceeded — max 60 req/min' },
 })
 
+// Request ID + structured access log + metrics recording
 app.use((req: Request, res: Response, next: NextFunction) => {
-  const t0 = Date.now()
-  res.on('finish', () =>
-    log('info', 'req', { method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - t0 })
-  )
+  const t0    = Date.now()
+  const reqId = crypto.randomUUID().slice(0, 8)
+  req.headers['x-request-id'] = reqId
+  res.setHeader('X-Request-ID', reqId)
+  res.on('finish', () => {
+    const ms = Date.now() - t0
+    log('info', 'req', { reqId, method: req.method, path: req.path, status: res.statusCode, ms })
+    recordRequest(req.path, ms, res.statusCode)
+  })
   next()
 })
 
@@ -207,7 +260,8 @@ app.post('/llm', llmLimiter, async (req: Request, res: Response) => {
   }
 })
 
-// ── Existing pipeline routes (preserved) ─────────────────────────────────────
+// ── Pipeline routes ───────────────────────────────────────────────────────────
+// buildCtx is unchanged — no business logic modification
 function buildCtx(extra: Record<string, unknown> = {}) {
   const hasOAI = !!process.env.OPENAI_API_KEY
   const hasVtx = !!process.env.GOOGLE_CLOUD_PROJECT
@@ -228,32 +282,51 @@ app.get('/api/system-prompt', (_req, res) => res.json({ systemPrompt: getLateral
 app.post('/api/insight', async (req, res) => {
   const { brief, archetype, brandVoice, language } = req.body || {}
   if (!brief) return void res.status(400).json({ error: 'brief required' })
-  try { res.json(await generateInsight(brief, archetype, brandVoice, language)) }
-  catch (e: unknown) { res.status(500).json({ error: String(e) }) }
+  const san = sanitize(brief)
+  if (!san.ok) return void res.status(400).json({ error: san.reason })
+  const pol = policyCheck(brief)
+  if (!pol.allowed) return void res.status(403).json({ error: `Policy blocked: ${pol.reason}` })
+  try {
+    res.json(await withTimeout(generateInsight(brief, archetype, brandVoice, language), 30_000, 'insight'))
+  } catch (e: unknown) { res.status(500).json({ error: String(e) }) }
 })
 
 app.post('/api/concept', async (req, res) => {
   const { insight, archetype, brandVoice, language } = req.body || {}
   if (!insight) return void res.status(400).json({ error: 'insight required' })
-  try { res.json(await mapConcept(insight, buildCtx({ archetype, brandVoice, language }))) }
-  catch (e: unknown) { res.status(500).json({ error: String(e) }) }
+  const san = sanitize(insight)
+  if (!san.ok) return void res.status(400).json({ error: san.reason })
+  const pol = policyCheck(insight)
+  if (!pol.allowed) return void res.status(403).json({ error: `Policy blocked: ${pol.reason}` })
+  try {
+    res.json(await withTimeout(mapConcept(insight, buildCtx({ archetype, brandVoice, language })), 30_000, 'concept'))
+  } catch (e: unknown) { res.status(500).json({ error: String(e) }) }
 })
 
 app.post('/api/script', async (req, res) => {
   const { concept, archetype, brandVoice, language } = req.body || {}
   if (!concept) return void res.status(400).json({ error: 'concept required' })
-  try { res.json(await writeScript(concept, buildCtx({ archetype, brandVoice, language }))) }
-  catch (e: unknown) { res.status(500).json({ error: String(e) }) }
+  const san = sanitize(concept)
+  if (!san.ok) return void res.status(400).json({ error: san.reason })
+  const pol = policyCheck(concept)
+  if (!pol.allowed) return void res.status(403).json({ error: `Policy blocked: ${pol.reason}` })
+  try {
+    res.json(await withTimeout(writeScript(concept, buildCtx({ archetype, brandVoice, language })), 30_000, 'script'))
+  } catch (e: unknown) { res.status(500).json({ error: String(e) }) }
 })
 
 app.post('/api/full-pipeline', async (req, res) => {
   const { brief, archetype, brandVoice, language } = req.body || {}
   if (!brief) return void res.status(400).json({ error: 'brief required' })
+  const san = sanitize(brief)
+  if (!san.ok) return void res.status(400).json({ error: san.reason })
+  const pol = policyCheck(brief)
+  if (!pol.allowed) return void res.status(403).json({ error: `Policy blocked: ${pol.reason}` })
   try {
     const ctx     = buildCtx({ archetype, brandVoice, language })
-    const insight = await generateInsight(brief, archetype, brandVoice, language)
-    const concept = await mapConcept(insight, ctx)
-    const script  = await writeScript(concept, ctx)
+    const insight = await withTimeout(generateInsight(brief, archetype, brandVoice, language), 30_000, 'insight')
+    const concept = await withTimeout(mapConcept(insight, ctx), 30_000, 'concept')
+    const script  = await withTimeout(writeScript(concept, ctx), 30_000, 'script')
     res.json({ brief, insight, concept, script, pipelineStatus: 'complete' })
   } catch (e: unknown) { res.status(500).json({ error: String(e) }) }
 })
@@ -261,6 +334,11 @@ app.post('/api/full-pipeline', async (req, res) => {
 // ── Agent + SaaS routes ──────────────────────────────────────────────────────
 app.use('/api/agent', agentRoutes)
 app.use('/api/saas',  saasRoutes)
+
+// ── GET /api/metrics ──────────────────────────────────────────────────────────
+app.get('/api/metrics', (_req, res) => {
+  res.json(getMetrics())
+})
 
 // ── POST /api/set-key  (write OpenAI key to keytar — called by ApiKeySetup UI) ─
 app.post('/api/set-key', async (req: Request, res: Response) => {
@@ -309,20 +387,40 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error' })
 })
 
+// ─── Startup environment validation ──────────────────────────────────────────
+function logStartupConfig(): void {
+  const hasOAI = !!process.env.OPENAI_API_KEY
+  const hasVtx = !!process.env.GOOGLE_CLOUD_PROJECT
+  log('info', 'startup config', {
+    port:        PORT,
+    bind:        '127.0.0.1',
+    provider:    hasOAI ? 'OpenAI' : hasVtx ? 'VertexAI' : 'Mock (no AI keys set)',
+    openai:      hasOAI ? 'configured' : 'OPENAI_API_KEY not set — mock fallback active',
+    vertex:      hasVtx ? 'configured' : 'GOOGLE_CLOUD_PROJECT not set — mock fallback active',
+    keytar:      keytar ? 'available' : 'unavailable — /llm returns 401',
+    corsOrigin:  CORS_ORIGIN,
+    rateLimits:  'general=120/min LLM=60/min',
+  })
+  if (!hasOAI && !hasVtx) {
+    log('warn', 'no AI provider configured — all pipeline calls will use mock responses', {})
+  }
+}
 
 // ─── Server bind (127.0.0.1 ONLY) ────────────────────────────────────────────
 let server: https.Server | http.Server
 
 if (CERT_PATH && KEY_PATH && fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
   server = https.createServer({ cert: fs.readFileSync(CERT_PATH), key: fs.readFileSync(KEY_PATH) }, app)
-  server.listen(PORT, '127.0.0.1', () =>
+  server.listen(PORT, '127.0.0.1', () => {
     log('info', 'HTTPS ready', { port: PORT, bind: '127.0.0.1' })
-  )
+    logStartupConfig()
+  })
 } else {
   server = http.createServer(app)
-  server.listen(PORT, '127.0.0.1', () =>
+  server.listen(PORT, '127.0.0.1', () => {
     log('warn', 'HTTP only — pass --cert/--key for HTTPS', { port: PORT })
-  )
+    logStartupConfig()
+  })
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
