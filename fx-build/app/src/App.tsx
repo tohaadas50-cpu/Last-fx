@@ -186,7 +186,7 @@ function App() {
   const [backendOrigin, setBackendOrigin] = useState<string>(
     () => {
       const url = import.meta.env.VITE_API_URL
-      return url || 'http://localhost:4002'
+      return url || ''
     }
   )
   const [showKeySetup, setShowKeySetup] = useState(false)
@@ -319,7 +319,7 @@ function App() {
     <>
     {showKeySetup && (
       <ApiKeySetup
-        backendPort={parseInt(backendOrigin.split(':').pop() || '4002', 10)}
+        backendPort={parseInt(backendOrigin.split(':').pop() || '3001', 10)}
         onKeyStored={() => setShowKeySetup(false)}
         onDismiss={() => setShowKeySetup(false)}
       />

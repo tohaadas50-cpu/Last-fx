@@ -1,4 +1,5 @@
 import { LateralThinkingContext, getLateralThinkingSystemPrompt } from './lateral-thinking-agent'
+import { safeParseJson } from '../utils/parse'
 
 /**
  * Concept Mapper with Advanced Lateral Thinking
@@ -15,17 +16,6 @@ interface ConceptOutput {
   lateralThinkingTechniques: string[]
 }
 
-function parseAIJson(text: string): any {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return JSON.parse(text);
-  } catch (e) {
-    return null;
-  }
-}
 
 export async function mapConcept(insight: any, context?: LateralThinkingContext): Promise<ConceptOutput> {
   // Extract insights from the lateral thinking breakdown
@@ -51,7 +41,7 @@ export async function mapConcept(insight: any, context?: LateralThinkingContext)
         getLateralThinkingSystemPrompt(context) + "\n\nSpecific Task: You are now mapping the insight to a concrete creative concept. Focus on strategy and visual metaphor.",
         context.providerConfig
       );
-      const parsed = parseAIJson(response.text);
+      const parsed = safeParseJson(response.text);
       if (parsed && parsed.title) {
         return {
           ...parsed,

@@ -208,8 +208,6 @@ app.post('/llm', llmLimiter, async (req: Request, res: Response) => {
 })
 
 // ── Existing pipeline routes (preserved) ─────────────────────────────────────
-const isProd = (process.env.NODE_ENV || 'production') === 'production'
-
 function buildCtx(extra: Record<string, unknown> = {}) {
   const hasOAI = !!process.env.OPENAI_API_KEY
   const hasVtx = !!process.env.GOOGLE_CLOUD_PROJECT
@@ -311,8 +309,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error' })
 })
 
-// Suppress unused warning
-void isProd
 
 // ─── Server bind (127.0.0.1 ONLY) ────────────────────────────────────────────
 let server: https.Server | http.Server

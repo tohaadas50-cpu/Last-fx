@@ -10,6 +10,7 @@
 
 import { generateVisualPrompt, VisualPrompt, ConceptInput } from './visual-prompt-generator'
 import { TrendBundle, buildTrendInjectionBlock } from './trend-service'
+import { safeParseJson } from '../utils/parse'
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -92,12 +93,6 @@ export interface LateralThinkingOutput {
 // UTILITY
 // ─────────────────────────────────────────────
 
-function safeParseJson(text: string): any {
-  try {
-    const m = text.match(/\{[\s\S]*\}/)
-    return m ? JSON.parse(m[0]) : JSON.parse(text)
-  } catch { return null }
-}
 
 // ─────────────────────────────────────────────
 // SYSTEM PROMPT

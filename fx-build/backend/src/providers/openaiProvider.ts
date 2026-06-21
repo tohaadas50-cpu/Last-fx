@@ -29,7 +29,7 @@ export function initializeOpenAI(): OpenAIConfig {
 
   return {
     apiKey,
-    model: process.env.OPENAI_MODEL || 'gpt-4',
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.8'),
     maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '2000', 10)
   }
@@ -44,7 +44,6 @@ export async function generateCreativeText(
   config: OpenAIConfig
 ): Promise<OpenAIResponse> {
   try {
-    // Fallback to mock if using development key
     if (!config.apiKey || config.apiKey.includes('mock')) {
       return {
         text: generateMockOpenAIResponse(prompt, systemPrompt),
@@ -85,69 +84,15 @@ export async function generateCreativeText(
 }
 
 /**
- * Stream creative text for real-time response
- */
-export async function streamCreativeText(
-  prompt: string,
-  systemPrompt: string,
-  config: OpenAIConfig,
-  onChunk?: (chunk: string) => void
-): Promise<string> {
-  try {
-    // TODO: Implement streaming with OpenAI
-    const response = generateMockOpenAIResponse(prompt, systemPrompt)
-
-    if (onChunk) {
-      // Simulate streaming
-      const words = response.split(' ')
-      for (const word of words) {
-        onChunk(word + ' ')
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      }
-    }
-
-    return response
-  } catch (error) {
-    console.error('Error streaming from OpenAI:', error)
-    throw error
-  }
-}
-
-/**
- * Generate multiple creative variations in parallel
- */
-export async function generateCreativeVariations(
-  prompt: string,
-  systemPrompt: string,
-  config: OpenAIConfig,
-  count: number = 3
-): Promise<OpenAIResponse[]> {
-  const variations: OpenAIResponse[] = []
-
-  for (let i = 0; i < count; i++) {
-    const variation = await generateCreativeText(
-      `${prompt}\n\nGenerate variation ${i + 1} of ${count}. Make it distinct and unique.`,
-      systemPrompt,
-      config
-    )
-    variations.push(variation)
-  }
-
-  return variations
-}
-
-/**
- * Mock response generator (replace with real API calls)
+ * Mock response generator
  */
 function generateMockOpenAIResponse(prompt: string, systemPrompt: string): string {
-  // Extract key elements from prompt
   const briefMatch = prompt.match(/Product:(.+?)(?:Challenge:|$)/i)
   const challengeMatch = prompt.match(/Challenge:(.+?)(?:Goal:|$)/i)
 
   const product = briefMatch ? briefMatch[1].trim() : 'the product'
   const challenge = challengeMatch ? challengeMatch[1].trim() : 'the core challenge'
 
-  // Generate contextual mock response
   if (prompt.toLowerCase().includes('insight') || prompt.toLowerCase().includes('lateral')) {
     return `💡 BREAKTHROUGH INSIGHT
 
@@ -230,119 +175,3 @@ FADE TO BLACK.
 
   return `Creative response generated for ${product}. This response integrates lateral thinking principles to provide original, ownable creative that breaks through category clutter.`
 }
-
-/**
- * Configuration guide for setting up OpenAI
- */
-export function getOpenAISetupGuide(): string {
-  return `
-## OpenAI Setup Guide
-
-### 1. Get OpenAI API Key
-- Go to platform.openai.com
-- Sign up or log in
-- Navigate to API keys section
-- Create a new secret key
-
-### 2. Set Environment Variables
-\`\`\`bash
-export OPENAI_API_KEY=sk-your-key-here
-export OPENAI_MODEL=gpt-4  # or gpt-3.5-turbo
-export OPENAI_TEMPERATURE=0.8
-export OPENAI_MAX_TOKENS=2000
-\`\`\`
-
-### 3. Install OpenAI SDK
-\`\`\`bash
-npm install openai
-\`\`\`
-
-### 4. Test Connection
-\`\`\`bash
-curl -X POST http://localhost:4000/api/insight \\
-  -H "Content-Type: application/json" \\
-  -d '{"brief":"Your product brief here"}'
-\`\`\`
-
-### Pricing Notes
-- GPT-4: More expensive but superior for creative work
-- GPT-3.5-turbo: Faster, cheaper, still good for lateral thinking
-- Tokens: 1000 tokens ≈ 750 words
-
-### Mock Mode
-If API key isn't configured, the system runs in mock mode for testing.
-`
-}
-
-/**
- * Example implementation for real OpenAI API call
- * Uncomment and modify when ready to integrate
- */
-/*
-import OpenAI from 'openai';
-
-export async function generateWithRealOpenAI(
-  prompt: string,
-  systemPrompt: string,
-  config: OpenAIConfig
-): Promise<OpenAIResponse> {
-  const client = new OpenAI({
-    apiKey: config.apiKey,
-  });
-
-  const response = await client.chat.completions.create({
-    model: config.model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt },
-    ],
-    temperature: config.temperature,
-    max_tokens: config.maxTokens,
-  });
-
-  const text = response.choices[0]?.message?.content || '';
-
-  return {
-    text,
-    model: config.model,
-    usage: {
-      promptTokens: response.usage?.prompt_tokens || 0,
-      completionTokens: response.usage?.completion_tokens || 0,
-      totalTokens: response.usage?.total_tokens || 0,
-    },
-  };
-}
-
-export async function streamWithRealOpenAI(
-  prompt: string,
-  systemPrompt: string,
-  config: OpenAIConfig,
-  onChunk?: (chunk: string) => void
-): Promise<string> {
-  const client = new OpenAI({
-    apiKey: config.apiKey,
-  });
-
-  const stream = client.chat.completions.stream({
-    model: config.model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt },
-    ],
-    temperature: config.temperature,
-    max_tokens: config.maxTokens,
-  });
-
-  let fullText = '';
-
-  stream.on('text', (text) => {
-    fullText += text;
-    if (onChunk) {
-      onChunk(text);
-    }
-  });
-
-  await stream.finalMessage();
-  return fullText;
-}
-*/

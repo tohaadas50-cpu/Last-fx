@@ -12,15 +12,15 @@ export default defineConfig({
     allowedHosts: 'all',
     proxy: {
       '/api': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
       '/healthz': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

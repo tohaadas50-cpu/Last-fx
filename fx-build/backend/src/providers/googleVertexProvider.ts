@@ -47,11 +47,9 @@ export async function generateCreativeText(
   config: VertexAIConfig
 ): Promise<VertexAIResponse> {
   try {
-    // Fallback to mock if using development key
     if (config.projectId.includes('mock')) {
-      const mockResponse = generateMockResponse(prompt, systemPrompt)
       return {
-        text: mockResponse,
+        text: generateMockResponse(prompt, systemPrompt),
         finishReason: 'STOP',
         usage: { inputTokens: 0, outputTokens: 0 }
       }
@@ -66,8 +64,6 @@ export async function generateCreativeText(
       model: config.modelName,
     });
 
-    // Vertex AI (Gemini) takes system instruction optionally or in contents
-    // Newer versions of the SDK support systemInstruction property
     const chat = model.startChat({
       history: [
         { role: 'user', parts: [{ text: `SYSTEM INSTRUCTION: ${systemPrompt}` }] },
@@ -89,7 +85,6 @@ export async function generateCreativeText(
     }
   } catch (error) {
     console.error('Error calling Vertex AI:', error)
-    // Return mock as fallback
     return {
       text: generateMockResponse(prompt, systemPrompt),
       finishReason: 'ERROR_FALLBACK',
@@ -99,31 +94,9 @@ export async function generateCreativeText(
 }
 
 /**
- * Generate multiple creative variations
- */
-export async function generateCreativeVariations(
-  prompt: string,
-  systemPrompt: string,
-  config: VertexAIConfig,
-  count: number = 3
-): Promise<VertexAIResponse[]> {
-  const variations: VertexAIResponse[] = []
-  for (let i = 0; i < count; i++) {
-    const variation = await generateCreativeText(
-      `${prompt}\n\nVariation ${i + 1} of ${count}: Generate a unique alternative.`,
-      systemPrompt,
-      config
-    )
-    variations.push(variation)
-  }
-  return variations
-}
-
-/**
  * Mock response generator
  */
 function generateMockResponse(prompt: string, systemPrompt: string): string {
-  // Extract key elements from prompt
   const insightMatch = prompt.match(/Generate.*insight.*about:(.+?)[\n.]/i)
   const key = insightMatch ? insightMatch[1].trim() : 'the product'
 
@@ -143,17 +116,4 @@ Beat 1: Recognition...`
   }
 
   return `[MOCK RESPONSE] processed through lateral thinking.`
-}
-
-/**
- * Configuration guide
- */
-export function getVertexAISetupGuide(): string {
-  return `
-## Google Vertex AI Setup Guide
-1. Create Google Cloud Project
-2. Enable Vertex AI API
-3. export GOOGLE_CLOUD_PROJECT=your-project-id
-4. gcloud auth application-default login
-`;
 }

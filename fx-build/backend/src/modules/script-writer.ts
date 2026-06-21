@@ -1,4 +1,5 @@
 import { LateralThinkingContext, getLateralThinkingSystemPrompt } from './lateral-thinking-agent'
+import { safeParseJson } from '../utils/parse'
 
 /**
  * Script Writer with Advanced Lateral Thinking
@@ -13,17 +14,6 @@ interface ScriptOutput {
   lateralThinkingTechniques: string[]
 }
 
-function parseAIJson(text: string): any {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return JSON.parse(text);
-  } catch (e) {
-    return null;
-  }
-}
 
 export async function writeScript(concept: any, context?: LateralThinkingContext): Promise<ScriptOutput> {
   let conceptTitle = concept?.title || 'Creative Concept'
@@ -51,7 +41,7 @@ export async function writeScript(concept: any, context?: LateralThinkingContext
         getLateralThinkingSystemPrompt(context) + "\n\nSpecific Task: You are now writing a cinematic script. Focus on emotion, pacing, and visual storytelling.",
         context.providerConfig
       );
-      const parsed = parseAIJson(response.text);
+      const parsed = safeParseJson(response.text);
       if (parsed && parsed.script) {
         return {
           ...parsed,

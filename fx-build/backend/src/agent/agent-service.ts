@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { safeParseJson } from '../utils/parse'
 import * as openaiProvider from '../providers/openaiProvider'
 import * as vertexProvider from '../providers/googleVertexProvider'
 import { generateInsight } from '../modules/insight-generator'
@@ -72,15 +73,6 @@ function pushAudit(runId: string, phase: AgentPhase, message: string, meta: Reco
   return item
 }
 
-function safeParseJson(text: string): any {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (jsonMatch) return JSON.parse(jsonMatch[0])
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
 
 function normalizeGoal(goal: string): string {
   return clampText(goal, 'Design a breakthrough TextFX execution loop')
