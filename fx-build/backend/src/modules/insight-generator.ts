@@ -4,8 +4,7 @@ import {
   LateralThinkingOutput
 } from './lateral-thinking-agent'
 import { retrieveKnowledge, getKnowledgeInjectPrompt } from './knowledge-base'
-import * as openaiProvider from '../providers/openaiProvider'
-import * as vertexProvider from '../providers/googleVertexProvider'
+import { gateway } from '../gateway/llm-gateway'
 
 /**
  * Insight Generator with Advanced Lateral Thinking
@@ -40,26 +39,14 @@ export async function generateInsight(
     const contextWithKnowledge = { ...context, knowledgePrompt, archetype, brandVoice, language }
 
     // Run all 5 lateral thinking techniques
-    // Choose Provider
-    let provider: any = null;
-    let providerConfig: any = null;
-    let useRealAI = false;
-
-    if (process.env.OPENAI_API_KEY) {
-      provider = openaiProvider;
-      providerConfig = openaiProvider.initializeOpenAI();
-      useRealAI = true;
-    } else if (process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID) {
-      provider = vertexProvider;
-      providerConfig = vertexProvider.initializeVertexAI();
-      useRealAI = true;
-    }
+    // All AI calls routed through the centralized LLM Gateway
+    const hasAI = !!(process.env.OPENAI_API_KEY || process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)
 
     const lateralOutput = await synthesizeLateralThinking({
       ...contextWithKnowledge,
-      useRealAI,
-      provider,
-      providerConfig
+      useRealAI: hasAI,
+      provider:       gateway,   // gateway handles provider selection, retry, fallback
+      providerConfig: null,
     })
 
     // Extract key insights
@@ -96,7 +83,7 @@ function parseBrief(brief: string): LateralThinkingContext {
 }
 
 function extractField(text: string, keywords: string): string | undefined {
-  const regex = new RegExp(`${keywords}[:\\s]+([^.]+)`, 'i')
+  const regex = new RegExp(`(?:${keywords})[:\\s]+([^.]+)`, 'i')
   const match = text.match(regex)
   return match ? match[1].trim() : undefined
 }

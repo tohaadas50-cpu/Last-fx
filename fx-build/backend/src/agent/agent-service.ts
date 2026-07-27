@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { safeParseJson } from '../utils/parse'
-import * as openaiProvider from '../providers/openaiProvider'
-import * as vertexProvider from '../providers/googleVertexProvider'
+import { gateway, getActiveProviderLabel } from '../gateway/llm-gateway'
 import { generateInsight } from '../modules/insight-generator'
 import { mapConcept } from '../modules/concept-mapper'
 import { writeScript } from '../modules/script-writer'
@@ -38,26 +37,13 @@ function clampText(value: string, fallback: string) {
 }
 
 function selectRuntime(): RuntimeSelection {
-  const hasOpenAI = !!process.env.OPENAI_API_KEY
-  const hasVertex = !!(process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)
-
-  if (hasOpenAI) {
-    return {
-      mode: 'OpenAI',
-      provider: openaiProvider as any,
-      providerConfig: openaiProvider.initializeOpenAI(),
-    }
+  // Gateway is the single source of truth for provider selection
+  const mode = getActiveProviderLabel() as AgentMode
+  return {
+    mode,
+    provider: gateway,
+    providerConfig: null,
   }
-
-  if (hasVertex) {
-    return {
-      mode: 'VertexAI',
-      provider: vertexProvider as any,
-      providerConfig: vertexProvider.initializeVertexAI(),
-    }
-  }
-
-  return { mode: 'Mock', provider: null, providerConfig: null }
 }
 
 function pushAudit(runId: string, phase: AgentPhase, message: string, meta: Record<string, unknown> = {}) {

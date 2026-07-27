@@ -30,8 +30,7 @@ import { generateInsight }  from './modules/insight-generator'
 import { mapConcept }       from './modules/concept-mapper'
 import { writeScript }      from './modules/script-writer'
 import { getLateralThinkingSystemPrompt } from './modules/lateral-thinking-agent'
-import * as vertexProvider  from './providers/googleVertexProvider'
-import * as openaiProvider  from './providers/openaiProvider'
+import { gateway, getGatewayStats } from './gateway/llm-gateway'
 import agentRoutes from './agent/agent-route'
 import saasRoutes  from './saas/saas-route'
 import { recordRequest, getMetrics } from './utils/metrics'
@@ -270,8 +269,8 @@ function buildCtx(extra: Record<string, unknown> = {}) {
     problem:        'creative challenge',
     target:         'audience',
     useRealAI:      hasOAI || hasVtx,
-    provider:       hasOAI ? openaiProvider : hasVtx ? vertexProvider : null,
-    providerConfig: hasOAI ? openaiProvider.initializeOpenAI() : hasVtx ? vertexProvider.initializeVertexAI() : null,
+    provider:       gateway,     // all calls routed through LLM Gateway
+    providerConfig: null,
     ...extra,
   }
 }
@@ -337,7 +336,7 @@ app.use('/api/saas',  saasRoutes)
 
 // ── GET /api/metrics ──────────────────────────────────────────────────────────
 app.get('/api/metrics', (_req, res) => {
-  res.json(getMetrics())
+  res.json({ ...getMetrics(), gateway: getGatewayStats() })
 })
 
 // ── POST /api/set-key  (write OpenAI key to keytar — called by ApiKeySetup UI) ─
