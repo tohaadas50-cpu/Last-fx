@@ -83,8 +83,9 @@ export function recordRequest(
  */
 export function getMetrics(): object {
   const providerMode =
-    process.env.OPENAI_API_KEY     ? 'OpenAI'   :
-    process.env.GOOGLE_CLOUD_PROJECT ? 'VertexAI' : 'Mock'
+    process.env.OPENROUTER_API_KEY     ? 'OpenRouter'   :
+    process.env.OPENAI_API_KEY         ? 'OpenAI'       :
+    process.env.GOOGLE_CLOUD_PROJECT   ? 'VertexAI'     : 'Mock'
 
   const routes: Record<string, object> = {}
   for (const [route, s] of routeStats) {

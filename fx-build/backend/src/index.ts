@@ -388,19 +388,21 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ─── Startup environment validation ──────────────────────────────────────────
 function logStartupConfig(): void {
+  const hasOR  = !!process.env.OPENROUTER_API_KEY
   const hasOAI = !!process.env.OPENAI_API_KEY
   const hasVtx = !!process.env.GOOGLE_CLOUD_PROJECT
   log('info', 'startup config', {
     port:        PORT,
     bind:        '127.0.0.1',
-    provider:    hasOAI ? 'OpenAI' : hasVtx ? 'VertexAI' : 'Mock (no AI keys set)',
-    openai:      hasOAI ? 'configured' : 'OPENAI_API_KEY not set — mock fallback active',
-    vertex:      hasVtx ? 'configured' : 'GOOGLE_CLOUD_PROJECT not set — mock fallback active',
+    provider:    hasOR ? 'OpenRouter' : hasOAI ? 'OpenAI' : hasVtx ? 'VertexAI' : 'Mock (no AI keys set)',
+    openrouter:  hasOR ? 'configured' : 'OPENROUTER_API_KEY not set',
+    openai:      hasOAI ? 'configured' : 'OPENAI_API_KEY not set',
+    vertex:      hasVtx ? 'configured' : 'GOOGLE_CLOUD_PROJECT not set',
     keytar:      keytar ? 'available' : 'unavailable — /llm returns 401',
     corsOrigin:  CORS_ORIGIN,
     rateLimits:  'general=120/min LLM=60/min',
   })
-  if (!hasOAI && !hasVtx) {
+  if (!hasOR && !hasOAI && !hasVtx) {
     log('warn', 'no AI provider configured — all pipeline calls will use mock responses', {})
   }
 }

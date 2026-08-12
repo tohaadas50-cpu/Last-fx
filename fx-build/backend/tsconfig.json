@@ -11,7 +11,8 @@
     "resolveJsonModule": true,
     "sourceMap":         false,
     "declaration":       false,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny":     false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

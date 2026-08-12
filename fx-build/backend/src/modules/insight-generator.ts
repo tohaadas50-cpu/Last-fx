@@ -40,7 +40,7 @@ export async function generateInsight(
 
     // Run all 5 lateral thinking techniques
     // All AI calls routed through the centralized LLM Gateway
-    const hasAI = !!(process.env.OPENAI_API_KEY || process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)
+    const hasAI = !!(process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)
 
     const lateralOutput = await synthesizeLateralThinking({
       ...contextWithKnowledge,

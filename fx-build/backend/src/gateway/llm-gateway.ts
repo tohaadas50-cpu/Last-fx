@@ -1,11 +1,11 @@
 /**
- * TextFX v5 — LLM Gateway (Phase 3.5)
+ * TextFX v5 — LLM Gateway (Phase 3.5 + OpenRouter)
  * ─────────────────────────────────────────────────────
  * Single entrypoint for ALL AI provider calls.
  *
  * Features:
- *  - Singleton OpenAI + VertexAI clients (initialized once, reused)
- *  - Priority provider list: OpenAI → VertexAI → Mock
+ *  - Singleton OpenRouter + OpenAI + VertexAI clients (initialized once, reused)
+ *  - Priority provider list: OpenRouter → OpenAI → VertexAI → Mock
  *  - Automatic fallback on provider failure
  *  - Retry with exponential backoff (up to 2 retries per provider)
  *  - 30 s timeout per attempt
@@ -110,6 +110,20 @@ function getOpenAIClient(): OpenAI {
   return _openaiClient
 }
 
+let _openrouterClient: OpenAI | null = null
+function getOpenRouterClient(): OpenAI {
+  if (!_openrouterClient) {
+    _openrouterClient = new OpenAI({
+      apiKey: process.env.OPENROUTER_API_KEY!,
+      baseURL: 'https://openrouter.io/api/v1',
+      defaultHeaders: {
+        'X-Title': 'TextFX',
+      },
+    })
+  }
+  return _openrouterClient
+}
+
 interface VertexClientBundle { ai: VertexAI; model: string }
 let _vertexBundle: VertexClientBundle | null = null
 function getVertexBundle(): VertexClientBundle {
@@ -126,15 +140,19 @@ function getVertexBundle(): VertexClientBundle {
 // Very rough USD/token estimates — updated for common models
 
 const COST_PER_1K: Record<string, { input: number; output: number }> = {
-  'gpt-4o':          { input: 0.005,   output: 0.015   },
-  'gpt-4o-mini':     { input: 0.00015, output: 0.0006  },
-  'gpt-4-turbo':     { input: 0.01,    output: 0.03    },
-  'gpt-3.5-turbo':   { input: 0.0005,  output: 0.0015  },
-  'gemini-pro':      { input: 0.00025, output: 0.0005  },
-  'gemini-1.5-pro':  { input: 0.00125, output: 0.005   },
-  'gemini-1.0-pro':  { input: 0.00025, output: 0.0005  },
-  'mock-model':      { input: 0,       output: 0       },
-  'default':         { input: 0.001,   output: 0.002   },
+  'claude-3-5-sonnet':   { input: 0.003,   output: 0.015   },
+  'claude-3-opus':       { input: 0.015,   output: 0.075   },
+  'claude-3-sonnet':     { input: 0.003,   output: 0.015   },
+  'claude-3-haiku':      { input: 0.00025, output: 0.00125 },
+  'gpt-4o':              { input: 0.005,   output: 0.015   },
+  'gpt-4o-mini':         { input: 0.00015, output: 0.0006  },
+  'gpt-4-turbo':         { input: 0.01,    output: 0.03    },
+  'gpt-3.5-turbo':       { input: 0.0005,  output: 0.0015  },
+  'gemini-pro':          { input: 0.00025, output: 0.0005  },
+  'gemini-1.5-pro':      { input: 0.00125, output: 0.005   },
+  'gemini-1.0-pro':      { input: 0.00025, output: 0.0005  },
+  'mock-model':          { input: 0,       output: 0       },
+  'default':             { input: 0.001,   output: 0.002   },
 }
 
 function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
@@ -290,6 +308,42 @@ async function callOpenAI(prompt: string, systemPrompt: string): Promise<Gateway
   }
 }
 
+async function callOpenRouter(prompt: string, systemPrompt: string): Promise<GatewayResponse> {
+  const client    = getOpenRouterClient()
+  const model     = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet'
+  const temp      = parseFloat(process.env.OPENROUTER_TEMPERATURE || '0.8')
+  const maxTokens = parseInt(process.env.OPENROUTER_MAX_TOKENS   || '2000', 10)
+  const t0        = Date.now()
+
+  const resp = await client.chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: prompt },
+    ],
+    temperature: temp,
+    max_tokens:  maxTokens,
+  })
+
+  const promptTokens     = resp.usage?.prompt_tokens     ?? estimateTokens(systemPrompt + prompt)
+  const completionTokens = resp.usage?.completion_tokens ?? estimateTokens(resp.choices[0]?.message?.content ?? '')
+  const totalTokens      = resp.usage?.total_tokens      ?? (promptTokens + completionTokens)
+  const costUsd          = estimateCost(model, promptTokens, completionTokens)
+
+  return {
+    text:             resp.choices[0]?.message?.content ?? '',
+    provider:         'OpenRouter',
+    model,
+    latencyMs:        Date.now() - t0,
+    usage:            { promptTokens, completionTokens, totalTokens },
+    cacheHit:         false,
+    retries:          0,
+    fallbackUsed:     false,
+    estimatedCostUsd: costUsd,
+  }
+}
+
+
 async function callVertexAI(prompt: string, systemPrompt: string): Promise<GatewayResponse> {
   const { ai, model } = getVertexBundle()
   const t0 = Date.now()
@@ -357,10 +411,11 @@ function callMock(prompt: string, _systemPrompt: string): GatewayResponse {
 
 // ─── Provider priority list ───────────────────────────────────────────────────
 
-type ProviderName = 'OpenAI' | 'VertexAI' | 'Mock'
+type ProviderName = 'OpenRouter' | 'OpenAI' | 'VertexAI' | 'Mock'
 
 function resolveProviders(): ProviderName[] {
   const list: ProviderName[] = []
+  if (process.env.OPENROUTER_API_KEY) list.push('OpenRouter')
   if (process.env.OPENAI_API_KEY) list.push('OpenAI')
   if (process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID) list.push('VertexAI')
   list.push('Mock')   // always available as final fallback
@@ -391,7 +446,8 @@ async function executeWithRetry(
 
     try {
       let resp: GatewayResponse
-      if (name === 'OpenAI')   resp = await withTimeout(callOpenAI(prompt, systemPrompt),   CALL_TIMEOUT)
+      if (name === 'OpenRouter')   resp = await withTimeout(callOpenRouter(prompt, systemPrompt), CALL_TIMEOUT)
+      else if (name === 'OpenAI')   resp = await withTimeout(callOpenAI(prompt, systemPrompt),   CALL_TIMEOUT)
       else if (name === 'VertexAI') resp = await withTimeout(callVertexAI(prompt, systemPrompt), CALL_TIMEOUT)
       else                          resp = callMock(prompt, systemPrompt)
 
@@ -507,7 +563,8 @@ export const gateway = {
 
 // ─── Current active provider label (for startup logs / metrics) ───────────────
 export function getActiveProviderLabel(): string {
-  if (process.env.OPENAI_API_KEY)                                            return 'OpenAI'
-  if (process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)    return 'VertexAI'
+  if (process.env.OPENROUTER_API_KEY)                                            return 'OpenRouter'
+  if (process.env.OPENAI_API_KEY)                                                return 'OpenAI'
+  if (process.env.GOOGLE_CLOUD_PROJECT || process.env.VERTEX_PROJECT_ID)        return 'VertexAI'
   return 'Mock'
 }
